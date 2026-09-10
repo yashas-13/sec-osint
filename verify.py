@@ -8,11 +8,21 @@ _SEVERITY_LABEL=["CRITICAL","HIGH","MEDIUM","LOW","INFO"]
 def verify_signal(url, context=""):
     """Verify by HEAD/GET metadata only. Returns (ok, evidence, reason)."""
     if not url or not url.startswith("http"): return False,"","not-url"
-    r=safe_get(url, timeout=10)
-    if not r: return False,"","unreachable"
-    if r.status_code>=400: return False,r.status_code,"http-error"
-    if contains_sensitive((context or "")[:500]): return False,"","sensitive-context"
-    return True, {"status":r.status_code, "ct":r.headers.get("Content-Type",""), "len":len(r.text)}, r.status_code
+    try:
+        import requests, warnings
+        warnings.filterwarnings("ignore", category=requests.packages.urllib3.exceptions.InsecureRequestWarning)
+    except:
+        import requests, warnings
+        warnings.filterwarnings("ignore")
+    try:
+        r = requests.get(url, timeout=10, verify=False, allow_redirects=True)
+        if r.status_code >= 400:
+            return False, {"status": r.status_code, "ct": r.headers.get("Content-Type", ""), "len": len(r.text)}, "http-error"
+        if contains_sensitive((context or "")[:500]):
+            return False, {"status": r.status_code, "ct": r.headers.get("Content-Type", ""), "len": len(r.text)}, "sensitive-context"
+        return True, {"status": r.status_code, "ct": r.headers.get("Content-Type", ""), "len": len(r.text)}, r.status_code
+    except Exception as e:
+        return False, {"error": type(e).__name__}, "unreachable"
 
 def safe_fingerprint(text, max_len=200):
     t=redact(text or "")

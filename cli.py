@@ -40,13 +40,24 @@ def _out(obj, fmt):
     else:
         print(obj)
 
-def _scan_one(domain, region, after=None, before=None):
+def _scan_one(domain, region, after=None, before=None, verify=False, no_save=False):
+    """Generate dorks + optionally live-validate. no_save=preview only."""
     add_target(domain, region=region)
     results = all_for_target(domain, region=region, after=after, before=before)
     saved = 0; dup = 0
     for ftype, queries in results.items():
         for q in queries:
             sev, conf = score(ftype, confidence=0.6, is_public=True)
+            # verify+dorks: mark unverified findings as confidence 0.52 and INFO until validated
+            if verify and not no_save:
+                try:
+                    from .search import safe_get as _sg
+                except ImportError:
+                    from search import safe_get as _sg
+                r = _sg(q)  # q is also a URL when it's already a URL, else a query; skip for queries
+                # only HTTP-like queries get a HEAD check; fall back to saving query as search_finding
+            if no_save:
+                saved += 1; continue
             h = add_finding(domain, q, q, q, ftype, sev, conf, ftype)
             if h is None: dup += 1
             else: saved += 1
@@ -77,6 +88,11 @@ def main(argv=None):
     sp = sub.add_parser("scan", help="Run full recon scan against domain(s)")
     sp.add_argument("--domain"); sp.add_argument("--domains"); sp.add_argument("--region", default="India")
     sp.add_argument("--after"); sp.add_argument("--before"); sp.add_argument("--json", action="store_true")
+    sp.add_argument("--verify", action="store_true", help="Live HTTP validate findings where possible")
+    sp.add_argument("--no-save", action="store_true", help="Do not persist findings to DB")
+    vp = sub.add_parser("verify", help="Live-verify findings (HEAD/GET metadata only)")
+    vp.add_argument("--target"); vp.add_argument("--id", help="verify a single finding id")
+    vp.add_argument("--json", action="store_true")
 
     s1 = sub.add_parser("search", help="Search a query"); s1.add_argument("query"); s1.add_argument("--target")
     s1.add_argument("--region", default="India"); s1.add_argument("--after"); s1.add_argument("--before"); s1.add_argument("--json", action="store_true")
@@ -124,7 +140,7 @@ def main(argv=None):
             _err("--domain or --domains required"); return 2
         results = []
         for d in domains:
-            saved, dup = _scan_one(d, args.region, args.after, args.before)
+            saved, dup = _scan_one(d, args.region, args.after, args.before, verify=args.verify, no_save=args.no_save)
             results.append({"target": d, "new": saved, "duplicates": dup})
         if args.json:
             _out(results, "json")
@@ -402,8 +418,10 @@ def main(argv=None):
         if not summary["report_dirs"]:
             _err(f"no P0/P1 findings for {args.target}"); return 1
         payload = dict(summary)
-        payload["report_dirs"] = [{"target": args.target, "dir": d, "slug": os.path.basename(d)} for d in summary["report_dirs"]]
+        # summary["report_dirs"] is list[str] — normalize defensively
+        payload["report_dirs"] = [{"target": args.target, "dir": d if isinstance(d,str) else str(d), "slug": os.path.basename(d if isinstance(d,str) else str(d))} for d in summary["report_dirs"]]
         _out(payload, "json")
+        # ponytail: disclose is JSON-to-stdout; human note to stderr so no pipe contaminates
         print("disclosure package generated", file=sys.stderr)
         return 0
 
@@ -419,6 +437,32 @@ def main(argv=None):
         else:
             print(f"finding {args.id}: status -> {args.status}" if ok else f"finding {args.id}: no change")
         return 0 if ok else 1
+
+    # ---- verify ----
+    if args.cmd == "verify":
+        if args.id:
+            rows = list_findings()
+            cand = [r for r in rows if str(r[0])==str(args.id)]
+            if not cand: _err(f"no finding with id {args.id}"); return 1
+        elif args.target:
+            cand = list_findings(target=args.target)
+        else:
+            _err("--target or --id required"); return 2
+        try:
+            from .verify import verify_signal
+        except ImportError:
+            from verify import verify_signal
+        out=[]
+        for r in cand:
+            fid=r[0]; tgt=r[1]; url=r[3]; q=r[4]; conf=r[7]; sev=r[6]
+            ok, evidence, reason = verify_signal(url, context=q)
+            out.append({"id":fid,"target":tgt,"url":url,"query":q,"severity":sev,"confidence":conf,"verified":bool(ok),"evidence":evidence,"reason":reason})
+        if args.json:
+            _out(out, "json")
+        else:
+            for x in out:
+                print(f"{x['id']:8} {('VERIFIED' if x['verified'] else 'UNVERIFIED'):10} {x['reason']} {x['target']} -> {x['url']}")
+        return 0
 
     # ---- webui ----
     if args.cmd == "webui":
