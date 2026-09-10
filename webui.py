@@ -11,16 +11,28 @@ from urllib.parse import urlparse, parse_qs
 # ---- integrate core modules ----
 ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT.parent))
-from store import (
-    init_db, add_target, list_targets, list_findings, add_finding,
-    mark_reported, set_finding_priority, set_finding_status,
-    list_by_priority, list_urgent, DB_PATH, fingerprint_hash
-)
-from triage import triage_order, TriageResult
-from disclosure import generate_all_p0_reports, company_slug
-from cli import _scan_one, _to_record
-from scoring import score, priority
-from redact import safe_fingerprint, redact, contains_sensitive
+try:
+    from sec_osint.store import (
+        init_db, add_target, list_targets, list_findings, add_finding,
+        mark_reported, set_finding_priority, set_finding_status,
+        list_by_priority, list_urgent, DB_PATH, fingerprint_hash
+    )
+    from sec_osint.triage import triage_order, TriageResult
+    from sec_osint.disclosure import generate_all_p0_reports, company_slug
+    from sec_osint.cli import _scan_one, _to_record
+    from sec_osint.scoring import score, priority
+    from sec_osint.redact import safe_fingerprint, redact, contains_sensitive
+except ModuleNotFoundError:
+    from store import (
+        init_db, add_target, list_targets, list_findings, add_finding,
+        mark_reported, set_finding_priority, set_finding_status,
+        list_by_priority, list_urgent, DB_PATH, fingerprint_hash
+    )
+    from triage import triage_order, TriageResult
+    from disclosure import generate_all_p0_reports, company_slug
+    from cli import _scan_one, _to_record
+    from scoring import score, priority
+    from redact import safe_fingerprint, redact, contains_sensitive
 
 WEBUI_DIR = ROOT / "webui"
 REPORTS_BASE = Path(os.path.expanduser("~/sec-osint/reports"))

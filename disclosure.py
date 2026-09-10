@@ -7,8 +7,12 @@ safe_fingerprint()/redact() so credentials, PII and tokens never reach disk.
 import hashlib, json, os, re
 from datetime import datetime
 from pathlib import Path
-from .redact import safe_fingerprint
-from .scoring import priority
+try:
+    from sec_osint.redact import safe_fingerprint
+    from sec_osint.scoring import priority
+except ImportError:
+    from redact import safe_fingerprint
+    from scoring import priority
 
 DEFAULT_BASE_DIR = "~/sec-osint/reports"
 

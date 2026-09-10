@@ -120,6 +120,11 @@ def main(argv=None):
     dc.add_argument("--target", required=True); dc.add_argument("--id"); dc.add_argument("--output", default="reports")
     st2 = sub.add_parser("status", help="Update finding status")
     st2.add_argument("--id", required=True); st2.add_argument("--status", required=True); st2.add_argument("--json", action="store_true")
+    disc = sub.add_parser("discover", help="Dynamic target discovery (passive headers + subdomains + fingerprint)")
+    disc.add_argument("--target", required=True, help="Base domain to fingerprint")
+    disc.add_argument("--subdomains", nargs="*", default=[], help="Extra subdomains to probe (passive)")
+    disc.add_argument("--json", action="store_true")
+
     wu = sub.add_parser("webui", help="Launch web UI server (SPA dashboard)")
     wu.add_argument("--host", default="127.0.0.1"); wu.add_argument("--port", type=int, default=8080)
     wu.add_argument("--token", help="Bearer token for API auth")
@@ -440,31 +445,162 @@ def main(argv=None):
 
     # ---- verify ----
     if args.cmd == "verify":
+        # look up by hash/rowid/id — hash is the real PK; rowid fallback for human-friendly ids
         if args.id:
-            rows = list_findings()
-            cand = [r for r in rows if str(r[0])==str(args.id)]
-            if not cand: _err(f"no finding with id {args.id}"); return 1
+            try:
+                cand=[]
+                for r in list_findings():
+                    if str(r[0])==str(args.id): cand.append(r)
+                if not cand:
+                    _c = __import__('sqlite3').connect(__import__('pathlib').Path(__import__('os').environ.get('SEC_OSINT_DB', str(__import__('pathlib').Path.home()/'.sec-osint/db.sqlite3'))))
+                    cur = _c.cursor()
+                    cur.execute("SELECT id,target,fingerprint,url,query,type,severity,confidence,exposure_class,evidence,ts,reported FROM findings WHERE rowid=? OR id=?", (args.id, args.id))
+                    cand = cur.fetchall()
+                    _c.close()
+                if not cand: _err(f"no finding with id {args.id}"); return 1
+            except Exception as e:
+                _err(f"verify: {e}"); return 1
         elif args.target:
             cand = list_findings(target=args.target)
         else:
             _err("--target or --id required"); return 2
         try:
-            from .verify import verify_signal
+            from sec_osint.verify import verify_signal as _verify_fn
         except ImportError:
-            from verify import verify_signal
+            from verify import verify_signal as _verify_fn
         out=[]
         for r in cand:
-            fid=r[0]; tgt=r[1]; url=r[3]; q=r[4]; conf=r[7]; sev=r[6]
-            ok, evidence, reason = verify_signal(url, context=q)
+            fid=str(r[0]); tgt=r[1]; url=r[3]; q=r[4]; conf=r[7]; sev=r[6]
+            ok, evidence, reason = _verify_fn(url, context=q)
             out.append({"id":fid,"target":tgt,"url":url,"query":q,"severity":sev,"confidence":conf,"verified":bool(ok),"evidence":evidence,"reason":reason})
         if args.json:
             _out(out, "json")
         else:
             for x in out:
-                print(f"{x['id']:8} {('VERIFIED' if x['verified'] else 'UNVERIFIED'):10} {x['reason']} {x['target']} -> {x['url']}")
+                s='VERIFIED' if x['verified'] else 'UNVERIFIED'
+                print(f"{x['id'][:10]:10} {s+'('+str(x['reason'])+')':24} {x['target']} -> {x['url']}")
+        return 0
+
+
+    # ---- discover ----
+    if args.cmd == "discover":
+        import requests, warnings, re
+        try:
+            from cve import correlate as cve_correlate, KNOWN_VULN_DB, parse_banner
+            from scoring import score as _score
+        except ImportError:
+            from cve import correlate as cve_correlate, KNOWN_VULN_DB, parse_banner
+            from scoring import score as _score
+        warnings.filterwarnings("ignore")
+
+        # 1) canonical host + optional subdomains
+
+        hosts = [args.target]
+
+        for sub in args.subdomains:
+
+            h = sub.strip().lower()
+
+            if '.' not in h: h = h + "." + args.target
+
+            if h not in hosts: hosts.append(h)
+
+        results = []
+
+        for host in hosts:
+
+            for url in [f"https://{host}/", f"http://{host}/"]:
+
+                try:
+
+                    r = requests.get(url, timeout=8, verify=False, allow_redirects=True)
+
+                    ct = r.headers.get("Content-Type", "")
+
+                    server = r.headers.get("Server", "")
+
+                    xpb = r.headers.get("X-Powered-By", "")
+
+                    hp = r.headers.get("Via", "") or r.headers.get("X-Generator", "")
+
+                    # 2) fingerprint
+
+                    products = parse_banner(server) if server else []
+
+                    if xpb: products += [(xpb.strip(), "unknown")]
+
+                    # 3) CVE correlation
+
+                    cve_evidence=[]
+
+                    highest_sev="INFO"; highest_conf=0.6; highest_priority="P3"; urgent=False
+
+                    for prod, ver in products:
+
+                        ev = cve_correlate(prod, ver)
+
+                        cve_evidence.append(ev)
+
+                        sev_map={"CRITICAL":3,"HIGH":2,"MEDIUM":1}
+
+                        if sev_map.get(ev.get("severity", ev.get("status","INFO"))):
+
+                            pass
+
+                    # 4) missing security headers -> triage as finding
+
+                    missing = [h for h in ["Strict-Transport-Security","Content-Security-Policy","X-Frame-Options","X-Content-Type-Options"] if h not in r.headers]
+
+                    if missing:
+
+                        sev2, conf2 = _score("fingerprint", confidence=0.85, is_public=True)
+
+                        msg = f"Missing security headers: {', '.join(missing)}"
+
+                        fid = add_finding(host, msg, url, "discover", "fingerprint", sev2, conf2, sev2, evidence=msg)
+
+                        results.append({"host":host,"url":url,"server":server,"status":r.status_code,"products":products,"missing_headers":missing,"fid":fid,"type":"security_headers","cve":cve_evidence})
+
+                    # 5) EOL / banner exposure itself
+
+                    if products:
+
+                        sev3, conf3 = _score("fingerprint", confidence=0.6, is_public=True)
+
+                        banner = f"Banner fingerprint: Server={server} X-PB={xpb}"
+
+                        fid2 = add_finding(host, server or xpb or hp or "banner", url, "discover", "fingerprint", sev3, conf3, "fingerprint", evidence=banner)
+
+                        results.append({"host":host,"url":url,"server":server,"banner":banner,"products":products,"cve":cve_evidence,"fid":fid2,"type":"banner"})
+
+                    break  # one url per host succeeded
+
+                except Exception as e:
+
+                    results.append({"host":host,"url":url,"error":str(e)})
+
+                    continue
+
+        if args.json:
+
+            _out(results, "json")
+
+        else:
+
+            for r in results:
+
+                if "missing_headers" in r:
+
+                    print(f"[HEADERS] {r['host']}: missing {r['missing_headers']} (fid={r.get('fid')})")
+
+                if "banner" in r:
+
+                    print(f"[BANNER]  {r['host']}: {r['banner']}")
+
         return 0
 
     # ---- webui ----
+
     if args.cmd == "webui":
         try:
             from .webui import run_server

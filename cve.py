@@ -22,6 +22,23 @@ def certin_url(product: str = "", keyword: str = "") -> str:
     return f"https://www.cert-in.org.in/Directions.aspx?q={q.replace(' ', '+')}" if q else ""
 
 
+# ponytail: add CVE map for common server banners -> version_prefix -> [(cve_id, sev, desc)]
+KNOWN_VULN_DB = {
+    ("Apache", "2.4.49"): [("CVE-2021-41773", "CRITICAL", "path traversal")],
+    ("Apache", "2.4.50"): [("CVE-2021-42013", "CRITICAL", "path traversal bypass")],
+    ("nginx", "1.18"): [("CVE-2021-23017", "HIGH", "HTTP/2 smuggling")],
+    ("HAProxy", "2."): [("CVE-2023-44487", "HIGH", "HTTP/2 rapid reset")],
+    ("Apache Traffic Server", "9.2."): [("CVE-2023-44487", "CRITICAL", "HTTP/2 rapid reset")],
+}
+
+def parse_banner(server_header: str) -> list[tuple[str, str]]:
+    import re
+    if not server_header: return []
+    res=[]
+    for part in re.findall(r"([A-Za-z0-9._-]+)/([0-9.]+)", server_header):
+        if part[0] and part[1]: res.append((part[0], part[1]))
+    return res or [("unknown", server_header[:30])]
+
 def is_known_exploited(cve_id: str) -> bool:
     return cve_id.upper() in ACTIVE_EXPLOITED
 
