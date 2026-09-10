@@ -12,7 +12,7 @@ env/
 # Data outputs (per project AGENTS)
 *.csv
 *.jsonl
-*.html
+debug_*.html
 debug_*.html
 *.json
 *.log

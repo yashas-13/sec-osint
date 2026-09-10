@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>sec-osint Web UI</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0d0d0d;--card:#141414;--card2:#1f1f1f;--fg:#e6e6e6;--fg2:#888;--accent:#00bfa5;--red:#ff4d4d;--orange:#ff7043;--yellow:#ffcc00;--green:#50c878;--blue:#42a5f5;--border:#2a2a2a;--r:8px}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--fg);line-height:1.5}
+a{color:var(--accent)}
+button{cursor:pointer}
+.app{display:flex;flex-direction:column;min-height:100vh}
+header{background:var(--card);border-bottom:1px solid var(--border);padding:.8rem 1rem;display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap}
+header h1{font-size:1.25rem;font-weight:800;color:var(--accent);letter-spacing:-.5px}
+.hdr{display:flex;align-items:center;gap:.75rem;font-size:.85rem}
+nav{background:#0a0a0a;border-bottom:1px solid var(--border);padding:0 1rem;display:flex;gap:0;overflow-x:auto}
+nav button{background:transparent;color:var(--fg2);border:none;border-bottom:2px solid transparent;padding:.65rem 1rem;font-size:.85rem;font-weight:600;cursor:pointer;white-space:nowrap}
+nav button:hover{color:var(--fg)}
+nav button.active{color:var(--accent);border-bottom-color:var(--accent)}
+.main{flex:1;padding:1rem}
+.container{max-width:1440px;margin:0 auto}
+.grid{display:grid;grid-template-columns:repeat(6,1fr);gap:1rem;margin-bottom:1.5rem}
+@media(max-width:1100px){.grid2{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:680px){.grid2{grid-template-columns:repeat(2,1fr)}}
+.grid2{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem}
+.card{background:var(--card);border-radius:var(--r);padding:1rem;border:1px solid var(--border)}
+.card h3{font-size:.75rem;text-transform:uppercase;color:var(--fg2);letter-spacing:.6px;margin-bottom:.4rem}
+.stat{font-size:1.9rem;font-weight:800;letter-spacing:-.5px}
+.stat.red{color:var(--red)}.stat.orange{color:var(--orange)}.stat.yellow{color:var(--yellow)}.stat.green{color:var(--green)}.stat.blue{color:var(--blue)}.stat.accent{color:var(--accent)}
+.table-wrap{overflow-x:auto;border-radius:var(--r);border:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;font-size:.82rem;background:var(--card)}
+th{background:var(--card2);color:var(--fg2);text-transform:uppercase;font-size:.68rem;letter-spacing:.5px;padding:.55rem .6rem;text-align:left;border-bottom:1px solid var(--border)}
+td{padding:.5rem .6rem;border-bottom:1px solid #1a1a1a;vertical-align:middle;white-space:nowrap}
+tr:hover td{background:rgba(255,255,255,.025)}
+.badge{display:inline-block;padding:.18rem .45rem;border-radius:4px;font-size:.68rem;font-weight:700;letter-spacing:.3px;white-space:nowrap}
+.sev-CRITICAL{background:var(--red);color:#fff}.sev-HIGH{background:var(--orange);color:#fff}.sev-MEDIUM{background:var(--yellow);color:#000}.sev-LOW{background:var(--green);color:#000}.sev-INFO{background:#555;color:#fff}
+.pri-P0{background:var(--red);color:#fff}.pri-P1{background:var(--orange);color:#fff}.pri-P2{background:var(--yellow);color:#000}.pri-P3{background:#555;color:#fff}
+.st-DISCOVERED{background:#555;color:#fff}.st-TRIAGED{background:var(--blue);color:#fff}.st-DISCLOSURE_READY{background:var(--yellow);color:#000}.st-REPORTED{background:var(--green);color:#000}
+.btn{padding:.4rem .75rem;border:none;border-radius:5px;font-size:.8rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:.35rem}
+.btn:active{transform:translateY(1px)}
+.btn-accent{background:var(--accent);color:#000}.btn-red{background:var(--red);color:#fff}.btn-orange{background:var(--orange);color:#fff}.btn-green{background:var(--green);color:#000}.btn-yellow{background:var(--yellow);color:#000}.btn-ghost{background:transparent;color:var(--fg2);border:1px solid var(--border)}.btn-ghost:hover{color:var(--fg);border-color:var(--fg)}
+.btn-sm{padding:.22rem .55rem;font-size:.7rem}
+input[type=text],input[type=number],select{background:#252525;color:var(--fg);border:1px solid var(--border);border-radius:5px;padding:.4rem .6rem;font-size:.85rem}
+input:focus,select:focus{outline:none;border-color:var(--accent)}
+.flex{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+.panel{display:none}.panel.active{display:block}
+.bar{padding:.5rem .75rem;background:var(--card);border-radius:var(--r);border:1px solid var(--border);margin-bottom:1rem;font-size:.85rem;display:none;align-items:center;gap:.5rem}
+.bar.show{display:flex}
+.bar.ok{border-color:var(--green);color:var(--green)}.bar.err{border-color:var(--red);color:var(--red)}
+.empty{color:#666;padding:1.2rem;text-align:center;font-size:.85rem}
+.chart{display:flex;align-items:flex-end;gap:.4rem;height:130px;padding-top:1.2rem}
+.bar-ch{background:var(--accent);border-radius:4px 4px 0 0;flex:1;display:flex;justify-content:center;align-items:flex-end;padding-bottom:.3rem;font-size:.72rem;font-weight:700;color:#000;min-width:18px;position:relative}
+.bar-ch .lbl{position:absolute;top:-20px;left:50%;transform:translateX(-50%);font-size:.68rem;color:var(--fg2);white-space:nowrap}
+pre{background:#0a0a0a;padding:.75rem;border-radius:5px;font-size:.78rem;overflow:auto;max-height:45vh;border:1px solid var(--border)}
+.tag{font-size:.7rem;color:var(--fg2);background:#1f1f1f;border:1px solid var(--border);padding:.15rem .4rem;border-radius:4px}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:s 1s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+  <h1>sec-osint <span style="font-weight:400;color:var(--fg2);font-size:.9rem">Web UI</span></h1>
+  <div class="hdr">
+    <span id="h-ver">v?</span>
+    <span class="tag" id="h-db">db ?</span>
+    <button class="btn btn-accent" onclick="actionScan()">Scan</button>
+    <button class="btn btn-green" onclick="actionTriageAll()">Triage All</button>
+    <button class="btn btn-orange" onclick="actionDisclose()">Disclose P0</button>
+  </div>
+</header>
+<nav id="nav">
+  <button class="active" data-tab="dashboard">Dashboard</button>
+  <button data-tab="targets">Targets</button>
+  <button data-tab="findings">Findings</button>
+  <button data-tab="triage">Triage</button>
+  <button data-tab="queue">Queue</button>
+  <button data-tab="disclose">Disclosure</button>
+  <button data-tab="reports">Reports</button>
+</nav>
+<div class="main">
+<div class="container">
+  <div id="bar" class="bar"></div>
+
+  <div id="panel-dashboard" class="panel active">
+    <div class="grid">
+      <div class="card"><h3>Targets</h3><div class="stat accent" id="d-targets">-</div></div>
+      <div class="card"><h3>Findings</h3><div class="stat" id="d-findings">-</div></div>
+      <div class="card"><h3>CRITICAL</h3><div class="stat red" id="d-critical">-</div></div>
+      <div class="card"><h3>P0</h3><div class="stat red" id="d-p0">-</div></div>
+      <div class="card"><h3>Urgent</h3><div class="stat orange" id="d-urgent">-</div></div>
+      <div class="card"><h3>Reported</h3><div class="stat green" id="d-reported">-</div></div>
+    </div>
+    <div class="grid2">
+      <div class="card"><h3>Severity</h3><div id="d-sev" class="chart"></div></div>
+      <div class="card"><h3>Priority</h3><div id="d-pri" class="chart"></div></div>
+      <div class="card"><h3>Recent P0/P1</h3><div id="d-recent" style="max-height:220px;overflow:auto"></div></div>
+    </div>
+  </div>
+
+  <div id="panel-targets" class="panel">
+    <div class="card" style="margin-bottom:1rem">
+      <div class="flex">
+        <input id="inp-t" placeholder="target (example.com)" style="width:220px" onkeydown="if(event.key==='Enter')addTarget()">
+        <input id="inp-r" placeholder="region" style="width:150px">
+        <input id="inp-i" placeholder="industry" style="width:150px">
+        <button class="btn btn-accent" onclick="addTarget()">Add</button>
+        <button class="btn btn-green" onclick="scanTarget()">Scan Target</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Managed Targets</h3>
+      <div class="table-wrap"><table><tr><th>Domain</th><th>Industry</th><th>Region</th><th>Added</th><th>Action</th></tr><tbody id="tb-targets"></tbody></table></div>
+    </div>
+  </div>
+
+  <div id="panel-findings" class="panel">
+    <div class="card" style="margin-bottom:1rem">
+      <div class="flex">
+        <select id="f-sev" onchange="loadFindings()"><option value="">All severity</option><option>CRITICAL</option><option>HIGH</option><option>MEDIUM</option><option>LOW</option><option>INFO</option></select>
+        <select id="f-pri" onchange="loadFindings()"><option value="">All priority</option><option>P0</option><option>P1</option><option>P2</option><option>P3</option></select>
+        <select id="f-st" onchange="loadFindings()"><option value="">All status</option><option>DISCOVERED</option><option>TRIAGED</option><option>DISCLOSURE_READY</option><option>REPORTED</option></select>
+        <input id="f-q" placeholder="search target/evidence..." oninput="debounceFindings()" style="width:220px">
+        <button class="btn btn-ghost" onclick="exportFindings()">Export CSV</button>
+        <button class="btn btn-ghost" onclick="clearFindings()">Clear All</button>
+      </div>
+      <div id="f-count" style="font-size:.78rem;color:var(--fg2);margin-top:.5rem"></div>
+    </div>
+    <div class="card">
+      <div class="table-wrap"><table><tr><th>ID</th><th>Target</th><th>Type</th><th>Severity</th><th>Priority</th><th>Status</th><th>Conf</th><th>Urgent</th><th>KEV</th><th>Time</th><th>Actions</th></tr><tbody id="tb-findings"></tbody></table></div>
+    </div>
+  </div>
+
+  <div id="panel-triage" class="panel">
+    <div class="card" style="margin-bottom:1rem">
+      <div class="flex">
+        <input id="tri-target" placeholder="target (blank=all)" style="width:220px">
+        <button class="btn btn-green" onclick="runTriage()">Run Triage</button>
+        <span id="tri-status" style="font-size:.85rem;color:var(--fg2)"></span>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Results</h3>
+      <div class="table-wrap"><table><tr><th>ID</th><th>Target</th><th>Severity</th><th>Priority</th><th>Conf</th><th>Urgent</th><th>KEV</th><th>Notes</th></tr><tbody id="tb-triage"></tbody></table></div>
+    </div>
+  </div>
+
+  <div id="panel-queue" class="panel">
+    <div class="card" style="margin-bottom:1rem">
+      <div class="flex">
+        <button class="btn btn-red" onclick="loadQueue('P0')">P0</button>
+        <button class="btn btn-orange" onclick="loadQueue('P1')">P1</button>
+        <button class="btn btn-yellow" onclick="loadQueue('P2')">P2</button>
+        <button class="btn btn-ghost" onclick="loadQueue('P3')">P3</button>
+        <button class="btn btn-ghost" onclick="loadQueue('')">All</button>
+        <span id="q-count" style="font-size:.85rem;color:var(--fg2);margin-left:.5rem"></span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="table-wrap"><table><tr><th>ID</th><th>Target</th><th>Type</th><th>Severity</th><th>Priority</th><th>Status</th><th>Conf</th><th>Urgent</th><th>Actions</th></tr><tbody id="tb-queue"></tbody></table></div>
+    </div>
+  </div>
+
+  <div id="panel-disclose" class="panel">
+    <div class="card" style="margin-bottom:1rem">
+      <div class="flex">
+        <input id="dc-target" placeholder="target" style="width:220px">
+        <button class="btn btn-orange" onclick="actionDisclose()">Generate Package</button>
+      </div>
+    </div>
+    <div class="card" id="dc-result"></div>
+  </div>
+
+  <div id="panel-reports" class="panel">
+    <div class="card" style="margin-bottom:1rem">
+      <div class="flex">
+        <input id="rp-target" placeholder="target (blank=all)" style="width:220px">
+        <button class="btn btn-accent" onclick="loadReports()">Load</button>
+      </div>
+    </div>
+    <div class="card" id="rp-result"></div>
+  </div>
+</div></div></div>
+
+<script>
+const $ = s => document.querySelector(s);
+
+// nav tabs
+document.querySelectorAll('#nav button').forEach(b=>{
+  b.onclick = ()=>{
+    document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    const id='panel-'+b.dataset.tab;
+    $( '#'+id ).classList.add('active');
+    if(b.dataset.tab==='dashboard') loadDashboard();
+    if(b.dataset.tab==='targets')   loadTargets();
+    if(b.dataset.tab==='findings')  loadFindings();
+    if(b.dataset.tab==='reports')   loadReports();
+    if(b.dataset.tab==='queue')     loadQueue('P0');
+  };
+});
+
+function showBar(msg,ok){const b=$('#bar');b.textContent=msg;b.className='bar show '+(ok?'ok':'err');setTimeout(()=>b.className='bar',4000)}
+async function api(path,opts={}){
+  try{
+    const r=await fetch(path,{headers:{'Content-Type':'application/json'} , ...opts});
+    const t=await r.text();
+    let j; try{j=JSON.parse(t)}catch{j={error:t||r.statusText}}
+    if(!r.ok){showBar(j.error||r.statusText);return null}
+    return j;
+  }catch(e){showBar(e.message);return null}
+}
+
+function badge(kind,val){
+  if(!val) return '';
+  const k=(kind+'-'+val).replace(/[^A-Za-z0-9_-]/g,'');
+  return '<span class="badge '+k+'">'+val+'</span>';
+}
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+
+// dashboard
+async function loadDashboard(){
+  const s=await api('/api/stats'); if(!s) return;
+  $('#d-targets').textContent=s.targets||0;
+  $('#d-findings').textContent=s.findings||0;
+  $('#d-critical').textContent=(s.by_severity&&s.by_severity.CRITICAL)||0;
+  $('#d-p0').textContent=s.p0||0;
+  $('#d-urgent').textContent=s.urgent||0;
+  $('#d-reported').textContent=s.reported||0;
+  $('#h-ver').textContent='v1.0.0';
+  $('#h-db').textContent=s.targets+' targets';
+  // severity chart
+  const sev=['CRITICAL','HIGH','MEDIUM','LOW','INFO'];
+  let max=Math.max(1,...sev.map(k=>(s.by_severity&&s.by_severity[k])||0));
+  $('#d-sev').innerHTML=sev.map(k=>{
+    const v=(s.by_severity&&s.by_severity[k])||0;
+    const h=6+Math.round(100*v/max);
+    return '<div class="bar-ch" style="height:'+h+'px"><span class="lbl">'+k+'</span>'+v+'</div>';
+  }).join('');
+  // priority chart
+  const pri=['P0','P1','P2','P3'];
+  max=Math.max(1,...pri.map(k=>(s.by_priority&&s.by_priority[k])||0));
+  $('#d-pri').innerHTML=pri.map(k=>{
+    const v=(s.by_priority&&s.by_priority[k])||0;
+    const h=6+Math.round(100*v/max);
+    const col=k==='P0'?'var(--red)':k==='P1'?'var(--orange)':k==='P2'?'var(--yellow)':'#555';
+    return '<div class="bar-ch" style="height:'+h+'px;background:'+col+'"><span class="lbl">'+k+'</span>'+v+'</div>';
+  }).join('');
+  // recent
+  const q=await api('/api/queue?priority=P0');
+  const q2=await api('/api/queue?priority=P1');
+  const all=(q&&q.findings||[]).concat(q2&&q2.findings||[]).slice(0,8);
+  $('#d-recent').innerHTML=all.length?all.map(f=>'<div style="padding:.3rem 0;border-bottom:1px solid #222;display:flex;justify-content:space-between;align-items:center;gap:.5rem"><span style="font-size:.82rem">'+esc(f.target)+' <span class="tag">'+esc(f.exposure_class||f.type||'')+'</span></span><span>'+badge('sev',f.severity)+' '+badge('pri',f.priority)+'</span></div>').join(''):'<div class="empty">No P0/P1</div>';
+}
+
+// targets
+async function loadTargets(){
+  const r=await api('/api/targets'); if(!r) return;
+  const tb=$('#tb-targets');
+  if(!r.targets||!r.targets.length){tb.innerHTML='<tr><td colspan="5" class="empty">No targets</td></tr>';return}
+  tb.innerHTML=r.targets.map(t=>'<tr><td class="mono">'+esc(t.domain)+'</td><td>'+esc(t.industry||'-')+'</td><td>'+esc(t.region||'-')+'</td><td style="font-size:.78rem">'+esc(t.added_at||'')+'</td><td class="flex"><button class="btn btn-sm btn-green" onclick="scanTargetFor(\''+esc(t.domain).replace(/'/g,'\\\'')+'\')">Scan</button><button class="btn btn-sm btn-ghost" onclick="delTarget(\''+esc(t.domain).replace(/'/g,'\\\'')+'\')">Del</button></td></tr>').join('');
+}
+async function addTarget(){
+  const d=$('#inp-t').value.trim(); if(!d){showBar('Enter a target');return}
+  const region=$('#inp-r').value.trim(), industry=$('#inp-i').value.trim();
+  const r=await api('/api/targets',{method:'POST',body:JSON.stringify({domain:d,region,industry})});
+  if(r){showBar('Added '+r.domain,true);$('#inp-t').value='';loadTargets();loadDashboard()}
+}
+async function delTarget(d){
+  const r=await api('/api/targets?domain='+encodeURIComponent(d),{method:'DELETE'});
+  if(r){showBar('Deleted '+d,true);loadTargets();loadDashboard()}
+}
+async function scanTarget(){
+  const t=$('#inp-t').value.trim(); if(!t){showBar('Enter a target to scan');return}
+  await doScan(t);
+}
+async function scanTargetFor(domain){await doScan(domain)}
+async function doScan(domain){
+  showBar('Scanning '+domain+' ... <span class="spin"></span>');
+  const r=await api('/api/scan',{method:'POST',body:JSON.stringify({target:domain})});
+  if(r){showBar(r.target+': '+r.new+' new, '+r.duplicates+' duplicate',true);loadDashboard();loadTargets()}
+}
+function actionScan(){const t=prompt('Scan target:'); if(t) doScan(t.trim())}
+function actionTriageAll(){runTriageAll()}
+
+// findings
+let _findDebounce=null;
+function debounceFindings(){clearTimeout(_findDebounce);_findDebounce=setTimeout(loadFindings,300)}
+async function loadFindings(){
+  const sev=$('#f-sev').value, pri=$('#f-pri').value, st=$('#f-st').value, q=$('#f-q').value.trim();
+  const url='/api/findings?limit=500'+(sev?'&severity='+encodeURIComponent(sev):'')+(pri?'&priority='+encodeURIComponent(pri):'')+(q?'&target='+encodeURIComponent(q):'');
+  const r=await api(url); if(!r) return;
+  let rows=r.findings||[];
+  if(st) rows=rows.filter(f=>(f.status||'DISCOVERED')===st);
+  $('#f-count').textContent=rows.length+' findings';
+  const tb=$('#tb-findings');
+  if(!rows.length){tb.innerHTML='<tr><td colspan="11" class="empty">No findings</td></tr>';return}
+  tb.innerHTML=rows.slice(0,300).map(f=>'<tr><td class="mono">'+f.id+'</td><td>'+esc(f.target)+'</td><td class="tag">'+esc(f.exposure_class||f.type||'')+'</td><td>'+badge('sev',f.severity)+'</td><td>'+badge('pri',f.priority||'P3')+'</td><td>'+badge('st',f.status||'DISCOVERED')+'</td><td>'+Math.round((f.confidence||0)*100)+'%</td><td>'+(f.urgent_disclosure?'🔴':'')+'</td><td>'+(f.active_exploitation?'KEV':'')+'</td><td style="font-size:.78rem">'+esc(f.timestamp||'')+'</td><td class="flex"><button class="btn btn-sm btn-green" onclick="triageOne('+f.id+',\''+esc(f.target).replace(/'/g,'\\\'')+'\')">Triage</button><button class="btn btn-sm btn-ghost" onclick="statusOne('+f.id+',\'TRIAGED\')">Triaged</button><button class="btn btn-sm btn-ghost" onclick="statusOne('+f.id+',\'DISCLOSURE_READY\')">Ready</button><button class="btn btn-sm btn-ghost" onclick="statusOne('+f.id+',\'REPORTED\')">Reported</button></td></tr>').join('');
+}
+async function clearFindings(){if(!confirm('Clear all findings?')) return; await api('/api/findings',{method:'DELETE'});loadFindings();loadDashboard()}
+function exportFindings(){location.href='/api/export?format=csv'}
+async function triageOne(id,target){showBar('Triaging ...');const r=await api('/api/triage',{method:'POST',body:JSON.stringify({target})});if(r){showBar('Triaged '+r.results.length+' findings',true);loadFindings();loadDashboard()}}
+async function statusOne(id,status){
+  const r=await api('/api/status',{method:'POST',body:JSON.stringify({id:String(id),status})});
+  if(r){showBar('Status -> '+status,true);loadFindings();loadDashboard()}
+}
+
+// triage
+async function runTriage(){
+  const t=$('#tri-target').value.trim();
+  $('#tri-status').innerHTML='<span class="spin"></span> triaging...';
+  const r=await api('/api/triage',{method:'POST',body:JSON.stringify(t?{target:t}:{})});
+  $('#tri-status').textContent='';
+  if(!r){$('#tb-triage').innerHTML='<tr><td colspan="8" class="empty">No results</td></tr>';return}
+  const rows=r.results||[];
+  if(!rows.length){$('#tb-triage').innerHTML='<tr><td colspan="8" class="empty">No findings</td></tr>';return}
+  $('#tb-triage').innerHTML=rows.slice(0,500).map(f=>'<tr><td>'+f.id+'</td><td>'+esc(f.target||'')+'</td><td>'+badge('sev',f.severity)+'</td><td>'+badge('pri',f.priority)+'</td><td>'+Math.round((f.confidence||0)*100)+'%</td><td>'+(f.urgent_disclosure?'🔴':'')+'</td><td>'+(f.active_exploitation?'🔴':'')+'</td><td style="white-space:normal;font-size:.78rem;max-width:280px">'+esc(f.triage_notes||'')+'</td></tr>').join('');
+  showBar('Triage: P0 '+rows.filter(r=>r.priority==='P0').length+' · P1 '+rows.filter(r=>r.priority==='P1').length,true);
+  loadDashboard();
+}
+async function runTriageAll(){await runTriage(); loadFindings(); loadQueue('P0')}
+
+// queue
+let _curQueue='P0';
+async function loadQueue(pri){
+  _curQueue=pri||'';
+  const qs=pri?'?priority='+encodeURIComponent(pri):'';
+  const r=await api('/api/queue'+qs); if(!r) return;
+  $('#q-count').textContent=(pri||'All')+' — '+(r.count||0)+' findings';
+  const rows=r.findings||[];
+  const tb=$('#tb-queue');
+  if(!rows.length){tb.innerHTML='<tr><td colspan="9" class="empty">No '+esc(pri||'all')+' findings</td></tr>';return}
+  tb.innerHTML=rows.slice(0,300).map(f=>'<tr><td>'+f.id+'</td><td>'+esc(f.target)+'</td><td class="tag">'+esc(f.exposure_class||f.type||'')+'</td><td>'+badge('sev',f.severity)+'</td><td>'+badge('pri',f.priority||pri)+'</td><td>'+badge('st',f.status||'DISCOVERED')+'</td><td>'+Math.round((f.confidence||0)*100)+'%</td><td>'+(f.urgent_disclosure?'🔴':'')+'</td><td class="flex"><button class="btn btn-sm btn-ghost" onclick="statusOne('+f.id+',\'TRIAGED\')">Triaged</button><button class="btn btn-sm btn-ghost" onclick="statusOne('+f.id+',\'DISCLOSURE_READY\')">Ready</button><button class="btn btn-sm btn-ghost" onclick="statusOne('+f.id+',\'REPORTED\')">Reported</button></td></tr>').join('');
+}
+
+// disclosure
+async function actionDisclose(){
+  const t=($('#dc-target')||$('#tri-target')).value.trim() || prompt('Disclose target:');
+  if(!t) return;
+  $('#dc-result').innerHTML='<span class="spin"></span> generating...';
+  const r=await api('/api/disclose',{method:'POST',body:JSON.stringify({target:t.trim()})});
+  if(!r){$('#dc-result').innerHTML='<div class="empty">No P0/P1 package</div>';return}
+  $('#dc-result').innerHTML='<div class="flex" style="margin-bottom:.5rem"><span class="tag">P0: '+r.total_p0+'</span><span class="tag">P1: '+r.total_p1+'</span></div>'+(r.report_dirs||[]).map(d=>'<div style="font-size:.82rem;margin:.25rem 0">'+esc((d.dir||d))+'</div>').join('') || '<div class="empty">No P0/P1 for '+esc(t)+' (triage first)</div>';
+  loadReports();
+}
+
+// reports
+async function loadReports(){
+  const q=$('#rp-target').value.trim();
+  const path=q?'?target='+encodeURIComponent(q):'';
+  const r=await api('/api/reports'+path); if(!r) return;
+  const dirs=r.reports||[];
+  if(!dirs.length){$('#rp-result').innerHTML='<div class="empty">No report packages</div>';return}
+  $('#rp-result').innerHTML=dirs.map(d=>'<div class="card" style="margin-bottom:.75rem"><div style="font-weight:700">'+esc(d.target)+'</div><div style="font-size:.78rem;color:var(--fg2);margin:.3rem 0">'+esc(d.dir)+'</div><div class="flex" style="flex-wrap:wrap">'+(d.files||[]).map(f=>'<span class="tag" style="cursor:pointer" onclick="viewReport(\''+esc(d.dir+'/'+f).replace(/'/g,'\\\'')+'\')">'+esc(f)+'</span>').join('')+'</div></div>').join('');
+}
+async function viewReport(path){
+  const r=await api('/api/reports/file?path='+encodeURIComponent(path)); if(!r) return;
+  const modal=document.createElement('div');
+  modal.innerHTML='<div style="position:fixed;inset:0;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;z-index:9999" onclick="this.remove()"><div class="card" style="max-width:720px;width:90vw;max-height:80vh;overflow:auto" onclick="event.stopPropagation()"><h3>'+esc(r.path||path)+'</h3><pre><code>'+esc(r.content||'')+'</code></pre><button class="btn btn-ghost" onclick="this.closest(\'div\').parentElement.remove()" style="margin-top:.5rem">Close</button></div></div>';
+  const el=modal.firstElementChild; document.body.appendChild(el);
+}
+
+// init
+loadDashboard();
+loadTargets();
+</script>
+</body>
+</html>
