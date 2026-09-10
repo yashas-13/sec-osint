@@ -11,10 +11,22 @@ Agent-interop contract (works with any CLI coding agent):
 - `sec-osint self-test` to verify runtime environment
 """
 import argparse, sys, json, time, os, sqlite3
-from .dorks import all_for_target, api_queries, staging_queries, error_queries, index_queries, doc_queries, cloud_queries, disclosure_queries
-from .store import init_db, add_target, list_targets, list_findings, add_finding, mark_reported, DB_PATH
-from .redact import redact, contains_sensitive, safe_fingerprint, HALT_MSG
-from .scoring import score, label
+try:
+    from .dorks import all_for_target, api_queries, staging_queries, error_queries, index_queries, doc_queries, cloud_queries, disclosure_queries
+except ImportError:
+    from dorks import all_for_target, api_queries, staging_queries, error_queries, index_queries, doc_queries, cloud_queries, disclosure_queries
+try:
+    from .store import init_db, add_target, list_targets, list_findings, add_finding, mark_reported, DB_PATH
+except ImportError:
+    from store import init_db, add_target, list_targets, list_findings, add_finding, mark_reported, DB_PATH
+try:
+    from .redact import redact, contains_sensitive, safe_fingerprint, HALT_MSG
+except ImportError:
+    from redact import redact, contains_sensitive, safe_fingerprint, HALT_MSG
+try:
+    from .scoring import score, label
+except ImportError:
+    from scoring import score, label
 try:
     from .triage import triage_order as _triage_order, classify as _classify
 except ImportError:
